@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace ARPGInventory
@@ -13,7 +11,7 @@ namespace ARPGInventory
         public readonly string name;
         public readonly string id;
         public readonly Vector2Int size;
-        public readonly Texture2D texture;
+        public readonly Sprite icon;
 
         private Vector2Int anchorCoordinate = new Vector2Int(0,0);
         public Vector2Int AnchorCoordinate { set => SetAnchorCoordinate(value); get => anchorCoordinate; }
@@ -21,14 +19,14 @@ namespace ARPGInventory
         private Vector2Int previousAnchorCoordinate = new Vector2Int(0,0);
         public Vector2Int PreviousAnchorCoordinate { get => previousAnchorCoordinate; }
 
-        public InventoryItem(bool isStackable, int maxStackSize, string name, string id, Vector2Int size, Texture2D texture)
+        public InventoryItem(bool isStackable, int maxStackSize, string name, string id, Vector2Int size, Sprite icon)
         {
             this.isStackable = isStackable;
             this.maxStackSize = maxStackSize;
             this.name = name;
             this.id = id;
             this.size = size;
-            this.texture = texture;
+            this.icon = icon;
         }
 
         /// <summary>
@@ -42,7 +40,7 @@ namespace ARPGInventory
             name = item.staticData.Name;
             id = item.Id;
             size = item.staticData.size;
-            texture = item.staticData.texture;
+            icon = item.staticData.icon;
         }
 
         public List<Vector2Int> GetItemAreaCoordinates()
@@ -76,7 +74,6 @@ namespace ARPGInventory
             if (value == anchorCoordinate) return;          
             previousAnchorCoordinate = anchorCoordinate;
             anchorCoordinate = value;
-            Debug.LogFormat("Setting new anchor coordinate: {0}, and now previous is coordinate is: {1}", anchorCoordinate, previousAnchorCoordinate);
         }
     }
 }

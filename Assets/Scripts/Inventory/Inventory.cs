@@ -1,10 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEditorInternal.Profiling.Memory.Experimental;
 using UnityEngine;
-using static UnityEditor.Progress;
-using static UnityEngine.Networking.UnityWebRequest;
 
 namespace ARPGInventory
 {
@@ -23,14 +19,18 @@ namespace ARPGInventory
         private const string REMOVABLE_ITEM_IS_NULL = "Unable to remove item, removable item is null";
         private const string GET_DATA_FROM_DRAGGED_ITEMSLOT = "iteration: {0} Getting item data from dragged itemslot with item name:";
 
+        private bool _isDebugging = false;
+        public bool isDebugging = false;
+        public static bool IsDebugging = false;
+
         public delegate void InventoryDelegate();
         public event InventoryDelegate onCreate;
         public event InventoryDelegate onChange;
         public event InventoryDelegate onClear;
 
-        public delegate void InventoryItemDataDelegate(ItemSlot inventoryItem);
-        public event InventoryItemDataDelegate onItemDataDelete;
-        public event InventoryItemDataDelegate onItemSlotChange;
+        public delegate void InventoryItemDelegate(ItemSlot inventoryItem);
+        public event InventoryItemDelegate onItemDelete;
+        public event InventoryItemDelegate onItemChange;
 
         public List<ItemSlot> itemSlots = new List<ItemSlot>();
 
@@ -44,35 +44,35 @@ namespace ARPGInventory
         InventoryCell[,] cells;
         public InventoryCell[,] Cells { get => GetInventoryCells(); }
 
-        public bool AddItemDataToInventory(InventoryItem item)
+        public bool AddItemToFirstAvailableCoordinate(InventoryItem item)
         {
-            var result = FindFirstPossiblePosition(item);
+            var result = FindFirstPossibleCoordinate(item);
             if (!result.isSuccess)
             {
-                Debug.LogWarning(NO_SPACE_IN_INVENTORY);
+                if(IsDebugging) Debug.LogWarning(NO_SPACE_IN_INVENTORY);
                 return false;
             }
 
-            ItemSlot itemSlot = GetItemSlotByCoordinate(item, result.coordinate);
-            ChangeCellsDataByItemData(item.size, result.coordinate, true, itemSlot);
-            onItemSlotChange?.Invoke(itemSlot);
+            ItemSlot itemSlot = GetItemSlotInCoordinate(item, result.coordinate);
+            ChangeCellsData(item.size, result.coordinate, true, itemSlot);
+            onItemChange?.Invoke(itemSlot);
             onChange?.Invoke();
             return true;
         }
 
-        public bool AddItemDataToCoordinate(InventoryItem item, Vector2Int coordinate)
+        public bool AddItemToCoordinate(InventoryItem item, Vector2Int coordinate)
         {
             item.AnchorCoordinate = coordinate;
             var isPossibleSpot = IsItemAreaAvailableInCoordinate(item, coordinate);
             if (!isPossibleSpot) { return isPossibleSpot; }
-            ItemSlot itemSlot = GetItemSlotByCoordinate(item, coordinate);
-            ChangeCellsDataByItemData(item.size, coordinate, true, itemSlot);
-            onItemSlotChange?.Invoke(itemSlot);
+            ItemSlot itemSlot = GetItemSlotInCoordinate(item, coordinate);
+            ChangeCellsData(item.size, coordinate, true, itemSlot);
+            onItemChange?.Invoke(itemSlot);
             onChange?.Invoke();
             return isPossibleSpot;
         }
 
-        public DropItemResult TryToDropItemSlotToCoordinate(ItemSlot itemSlotToDropFrom, Vector2Int dropCoordinate)
+        public DropItemResult DragDropItemToCoordinate(ItemSlot itemSlotToDropFrom, Vector2Int dropCoordinate)
         {
             var dropItemResult = new DropItemResult();
 
@@ -82,13 +82,13 @@ namespace ARPGInventory
             dropItemResult.isAvailableDropSpot = true;
             ItemSlot itemSlotInCoordinate = FindItemSlotByCoordinate(dropCoordinate);
 
-            if (itemSlotInCoordinate == null) return DropItemSlotToClearSpot(itemSlotToDropFrom, dropItemResult, dropCoordinate, itemSlotOriginalCoordinate);
+            if (itemSlotInCoordinate == null) return HandleItemDropInFullyAvailableCoordinate(itemSlotToDropFrom, dropItemResult, dropCoordinate, itemSlotOriginalCoordinate);
 
-            dropItemResult = DropItemsInExistingFromItemSlot(itemSlotToDropFrom, itemSlotInCoordinate, dropItemResult);
+            dropItemResult = HandleItemStackingOnDrop(itemSlotToDropFrom, itemSlotInCoordinate, dropItemResult);
 
             if (!itemSlotToDropFrom.HasItems) return RemoveTheLeftOverItemSlot(itemSlotToDropFrom, dropItemResult, itemSlotOriginalCoordinate, itemSlotInCoordinate);
 
-            return HandleSplitSlot(itemSlotToDropFrom, dropItemResult, itemSlotInCoordinate);
+            return HandleItemStackSplitOnDrop(itemSlotToDropFrom, dropItemResult, itemSlotInCoordinate);
         }
 
         public bool IsStackingItemInCoordinate(Vector2Int coordinate, InventoryItem item)
@@ -124,18 +124,18 @@ namespace ARPGInventory
 
             if (IsCoordinateReserved(coordinate))
             {
-                if (IsCoordinateReservedByThisItem(coordinate, item)) return true;
+                if (IsCoordinateReservedByItem(coordinate, item)) return true;
                 return IsStackingItemInCoordinate(coordinate, item);
             }
-            
-            Debug.LogWarningFormat(AVAILABLE_CELL, coordinate.x, coordinate.y);
+
+            if (IsDebugging) Debug.LogWarningFormat(AVAILABLE_CELL, coordinate.x, coordinate.y);
             return true;
         }
 
         public bool IsCoordinateReserved(Vector2Int coordinate)
         {
             InventoryCell cell = Cells[coordinate.x, coordinate.y];
-            if (cell.isReserved) Debug.LogWarningFormat(INVENTORY_COORDINATE_IS_RESERVED, coordinate);           
+            if (cell.isReserved && IsDebugging) Debug.LogWarningFormat(INVENTORY_COORDINATE_IS_RESERVED, coordinate);           
             return cell.isReserved;
         }
 
@@ -147,11 +147,11 @@ namespace ARPGInventory
                 coordinate.y > (Height - 1) ||
                 coordinate.y < 0;
 
-            if (isOutOfBounds) Debug.LogWarningFormat(INVALID_COORDINATE, coordinate);
+            if (isOutOfBounds && IsDebugging) Debug.LogWarningFormat(INVALID_COORDINATE, coordinate);
             return isOutOfBounds;
         }
 
-        public ItemPlaceSearchResult FindFirstPossiblePosition(InventoryItem item)
+        public ItemPlaceSearchResult FindFirstPossibleCoordinate(InventoryItem item)
         {
             ItemPlaceSearchResult result = new ItemPlaceSearchResult();
             for (int x = 0; x < Width; x++)
@@ -178,11 +178,11 @@ namespace ARPGInventory
         {
             foreach (var itemSlot in itemSlots)
             {
-                InventoryItem itemInInventory = itemSlot.FindItemDataByID(id);
+                InventoryItem itemInInventory = itemSlot.FindItemByID(id);
                 if (itemInInventory != null)
                     return itemSlot;
             }
-            Debug.LogWarningFormat(UNABLE_TO_FIND_ITEM_BY_ID, id);
+            if (IsDebugging) Debug.LogWarningFormat(UNABLE_TO_FIND_ITEM_BY_ID, id);
             return null;
         }
 
@@ -191,19 +191,19 @@ namespace ARPGInventory
             return itemSlots.Find(o => o.AnchorCoordinate == coordinate);
         }
 
-        public InventoryItem GetItemDataById(string id)
+        public InventoryItem GetItemById(string id)
         {
             ItemSlot itemSlot = FindItemSlotByID(id);
             if (itemSlot == null) { Debug.LogWarningFormat(UNABLE_TO_FIND_ITEM_BY_ID, id); return null; }
             InventoryItem itemData = itemSlot.GetItem();
             RemoveItemSlotIfEmpty(itemSlot);
-            onItemDataDelete?.Invoke(itemSlot);
+            onItemDelete?.Invoke(itemSlot);
             onChange?.Invoke();
-            Debug.LogWarningFormat(GET_ITEM_BY_ID_WAS_SUCCESSFULL, itemData.name, id);
+            if (IsDebugging) Debug.LogWarningFormat(GET_ITEM_BY_ID_WAS_SUCCESSFULL, itemData.name, id);
             return itemData;
         }
 
-        public InventoryItem GetItemDataByCoordinate(Vector2Int coordinate)
+        public InventoryItem GetItemFromCoordinate(Vector2Int coordinate)
         {
             if (!IsCoordinateOutOfBounds(coordinate)) return null;
             Vector2Int anchorCoordinate = Cells[coordinate.x, coordinate.y].coordinateToTheAnchorPoint;
@@ -211,9 +211,9 @@ namespace ARPGInventory
             if (itemSlot == null) { Debug.LogWarningFormat(NO_ITEMS_IN_COORDINATE, coordinate); return null; }
             InventoryItem itemData = itemSlot.GetItem();
             RemoveItemSlotIfEmpty(itemSlot);
-            onItemDataDelete?.Invoke(itemSlot);
+            onItemDelete?.Invoke(itemSlot);
             onChange?.Invoke();
-            Debug.LogWarningFormat(GET_ITEM_BY_COORDINATE_WAS_SUCCESFULL, itemData.name, coordinate);
+            if (IsDebugging) Debug.LogWarningFormat(GET_ITEM_BY_COORDINATE_WAS_SUCCESFULL, itemData.name, coordinate);
             return itemData;
         }
 
@@ -229,66 +229,66 @@ namespace ARPGInventory
             }
             itemSlots.ForEach(o => o.items.Clear());
             itemSlots.Clear();
-            Debug.LogWarning(INVENTORY_CLEARED);
+            if (IsDebugging) Debug.LogWarning(INVENTORY_CLEARED);
             onChange?.Invoke();
             onClear?.Invoke();
         }
 
-        private bool IsCoordinateReservedByThisItem(Vector2Int coordinate, InventoryItem item)
+        private bool IsCoordinateReservedByItem(Vector2Int coordinate, InventoryItem item)
         {
             Vector2Int cellCoordinateToAnchorPoint = Cells[coordinate.x, coordinate.y].coordinateToTheAnchorPoint;
             ItemSlot itemSlot = FindItemSlotByCoordinate(cellCoordinateToAnchorPoint);
             var isItemInSlot = itemSlot.items.Contains(item);
             var reservedCoordinates = item.GetItemAreaCoordinates();
             var isCoordinateReservedByThisItem = reservedCoordinates.Contains(coordinate) && isItemInSlot;
-            if (isCoordinateReservedByThisItem) Debug.LogFormat("Coordinate {0} is reserved by this item: {1}", coordinate, item.name);
+            if (isCoordinateReservedByThisItem && IsDebugging) Debug.LogFormat("Coordinate {0} is reserved by this item: {1}", coordinate, item.name);
             return isCoordinateReservedByThisItem;
         }
 
-        private DropItemResult DropItemSlotToClearSpot(ItemSlot itemSlot, DropItemResult dropItemResult, Vector2Int inventoryCoordinate, Vector2Int itemOriginalSpot)
+        private DropItemResult HandleItemDropInFullyAvailableCoordinate(ItemSlot itemSlot, DropItemResult dropItemResult, Vector2Int inventoryCoordinate, Vector2Int itemOriginalSpot)
         {
-            ChangeCellsDataByItemData(itemSlot.Size, itemOriginalSpot);
-            ChangeCellsDataByItemData(itemSlot.Size, inventoryCoordinate, true, itemSlot);
+            ChangeCellsData(itemSlot.Size, itemOriginalSpot);
+            ChangeCellsData(itemSlot.Size, inventoryCoordinate, true, itemSlot);
             dropItemResult.amountOfItemsDropped = itemSlot.StackSize;
             itemSlot.AnchorCoordinate = inventoryCoordinate;
-            onItemSlotChange?.Invoke(itemSlot);
+            onItemChange?.Invoke(itemSlot);
             onChange?.Invoke();
             return dropItemResult;
         }
 
-        private DropItemResult HandleSplitSlot(ItemSlot itemSlot, DropItemResult dropItemResult, ItemSlot itemSlotInCoordinate)
+        private DropItemResult HandleItemStackSplitOnDrop(ItemSlot itemSlot, DropItemResult dropItemResult, ItemSlot itemSlotInCoordinate)
         {
             dropItemResult.isItemsSplit = true;
-            onItemSlotChange?.Invoke(itemSlotInCoordinate);
-            onItemSlotChange?.Invoke(itemSlot);
+            onItemChange?.Invoke(itemSlotInCoordinate);
+            onItemChange?.Invoke(itemSlot);
             onChange?.Invoke();
             return dropItemResult;
         }
 
         private DropItemResult RemoveTheLeftOverItemSlot(ItemSlot itemSlot, DropItemResult dropItemResult, Vector2Int itemOriginalSpot, ItemSlot itemSlotInCoordinate)
         {
-            ChangeCellsDataByItemData(itemSlotInCoordinate.Size, itemOriginalSpot);
-            onItemSlotChange?.Invoke(itemSlotInCoordinate);
-            onItemSlotChange?.Invoke(itemSlot);
+            ChangeCellsData(itemSlotInCoordinate.Size, itemOriginalSpot);
+            onItemChange?.Invoke(itemSlotInCoordinate);
+            onItemChange?.Invoke(itemSlot);
             itemSlots.Remove(itemSlot);
             onChange?.Invoke();
             return dropItemResult;
         }
 
-        private DropItemResult DropItemsInExistingFromItemSlot(ItemSlot itemSlotToDropFrom, ItemSlot itemSlotInCoordinate, DropItemResult dropItemResult)
+        private DropItemResult HandleItemStackingOnDrop(ItemSlot itemSlotToDropFrom, ItemSlot itemSlotInCoordinate, DropItemResult dropItemResult)
         {
             int availableStackingSpace = itemSlotInCoordinate.MaxStackSize - itemSlotInCoordinate.StackSize;
             for (int i = 0; i < availableStackingSpace; i++)
             {
                 if (!itemSlotToDropFrom.HasItems) return dropItemResult;
-                DropItemFromItemSlot(i, itemSlotToDropFrom, itemSlotInCoordinate, dropItemResult);
+                StackItemFromItemSlot(i, itemSlotToDropFrom, itemSlotInCoordinate, dropItemResult);
             }
             return dropItemResult;
         }
 
-        private DropItemResult DropItemFromItemSlot(int iteration, ItemSlot itemSlotToDropFrom, ItemSlot itemSlotInCoordinate, DropItemResult dropItemResult)
+        private DropItemResult StackItemFromItemSlot(int iteration, ItemSlot itemSlotToDropFrom, ItemSlot itemSlotInCoordinate, DropItemResult dropItemResult)
         {
-            Debug.LogFormat(GET_DATA_FROM_DRAGGED_ITEMSLOT, iteration);
+            if (IsDebugging) Debug.LogFormat(GET_DATA_FROM_DRAGGED_ITEMSLOT, iteration);
             itemSlotInCoordinate.AddItem(itemSlotToDropFrom.GetItem());
             dropItemResult.amountOfItemsDropped++;
             return dropItemResult;
@@ -296,11 +296,11 @@ namespace ARPGInventory
 
         private void RemoveItemSlotIfEmpty(ItemSlot itemSlot)
         {
-            if (itemSlot == null) Debug.LogWarningFormat(REMOVABLE_ITEM_IS_NULL);
+            if (itemSlot == null && IsDebugging) Debug.LogWarningFormat(REMOVABLE_ITEM_IS_NULL);
             if (!itemSlot.HasItems) itemSlots.Remove(itemSlot);
         }
 
-        private void ChangeCellsDataByItemData(Vector2Int itemSize, Vector2Int coordinate, bool isReserved = false, ItemSlot itemSlot = null)
+        private void ChangeCellsData(Vector2Int itemSize, Vector2Int coordinate, bool isReserved = false, ItemSlot itemSlot = null)
         {
             for (int x = 0; x < itemSize.x; x++)
             {
@@ -355,25 +355,24 @@ namespace ARPGInventory
             return cells;
         }
 
-        private ItemSlot GetItemSlotByCoordinate(InventoryItem item, Vector2Int coordinate)
+        private ItemSlot GetItemSlotInCoordinate(InventoryItem item, Vector2Int coordinate)
         {
             ItemSlot itemSlot = FindItemSlotByCoordinate(coordinate);
             if (itemSlot != null) itemSlot.AddItem(item);
             else itemSlot = AddNewItemSlot(item, coordinate);
             return itemSlot;
         }
-    }
 
-    public struct ItemPlaceSearchResult
-    {
-        public bool isSuccess;
-        public Vector2Int coordinate;
-    }
+        private void OnValidate()
+        {
+            SetIsDebugging();        
+        }
 
-    public struct DropItemResult
-    {
-        public bool isAvailableDropSpot;
-        public bool isItemsSplit;
-        public int amountOfItemsDropped;
+        private void SetIsDebugging()
+        {
+            if (isDebugging == _isDebugging) return;
+            _isDebugging = isDebugging;
+            IsDebugging = _isDebugging;
+        }
     }
 }

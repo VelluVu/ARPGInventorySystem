@@ -42,21 +42,21 @@ public class InventoryEditor : Editor
         if (GUILayout.Button(ADD_ITEM))
         {
             Item item = new Item(testItem);
-            var isSuccess = inventory.AddItemDataToInventory(new InventoryItem(item));
+            var isSuccess = inventory.AddItemToFirstAvailableCoordinate(new InventoryItem(item));
             if (isSuccess) addedItems.Add(item.Id, item);
         }
 
         if (GUILayout.Button(ADD_ITEM_TO_COORDINATE))
         {
             Item item = new Item(testItem);
-            var isSuccess = inventory.AddItemDataToCoordinate(new InventoryItem(item), coordinate);
+            var isSuccess = inventory.AddItemToCoordinate(new InventoryItem(item), coordinate);
             if (isSuccess) addedItems.Add(item.Id, item);
         }
 
         if (GUILayout.Button(GET_ITEM_BY_ID))
         {
             string id = addedItems.Last().Key;
-            InventoryItem itemData = inventory.GetItemDataById(id);
+            InventoryItem itemData = inventory.GetItemById(id);
             if (itemData != null)
             {
                 Debug.LogFormat(FOUND_ITEM_BY_ID, itemData.name, itemData.id);
@@ -66,7 +66,7 @@ public class InventoryEditor : Editor
 
         if (GUILayout.Button(GET_ITEM_BY_COORDINATE))
         {
-            InventoryItem itemData = inventory.GetItemDataByCoordinate(coordinate);
+            InventoryItem itemData = inventory.GetItemFromCoordinate(coordinate);
             if (itemData != null)
             {
                 Debug.LogFormat(FOUND_ITEM_BY_COORDINATE, itemData.name, coordinate, itemData.id);

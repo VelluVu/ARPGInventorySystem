@@ -1,8 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEditor;
-using System;
 
 namespace ARPGInventory
 {
@@ -84,12 +82,9 @@ namespace ARPGInventory
             RectangleTransform.anchoredPosition = anchoredPosition;
         }
 
-        private void CreateItemSprite(Texture2D texture)
-        {
-            Rect spriteRect = new Rect(0, 0, texture.width, texture.height);
-            Sprite sprite = Sprite.Create(texture, spriteRect, new Vector2(0.5f, 0.5f));
-            sprite.name = texture.name;
-            Image.sprite = sprite;
+        private void SetSprite(Sprite icon)
+        {          
+            Image.sprite = icon;
         }
 
         private void ActivateTextComponent()
@@ -120,7 +115,7 @@ namespace ARPGInventory
         {
             itemSlot = inventoryItem;
             UpdateImageUIRect(itemSlot.Size, itemSlot.AnchorCoordinate);
-            CreateItemSprite(inventoryItem.ItemTexture);
+            SetSprite(inventoryItem.ItemIcon);
             ActivateTextComponent();
         }
 

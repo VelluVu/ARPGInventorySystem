@@ -9,6 +9,6 @@ public class ItemSO : ScriptableObject
     public int maxStackSize = 1;
     public ItemUsageType usage = ItemUsageType.Consumable;
     public Vector2Int size = new Vector2Int(1,1);
-    public Texture2D texture;
+    public Sprite icon;
     public List<Stat> stats;
 }

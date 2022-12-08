@@ -26,7 +26,6 @@ namespace ARPGInventory
             onDragBegin?.Invoke(originalPosition, originalPosition);
             CanvasGroup.blocksRaycasts = false;
             CanvasGroup.alpha = 0.7f;
-            //Debug.LogFormat("Begin Drag: {0}", name);
         }
 
         public void OnDrag(PointerEventData eventData)
@@ -39,13 +38,11 @@ namespace ARPGInventory
             onDragEnd?.Invoke(originalPosition, Input.mousePosition);
             CanvasGroup.alpha = 1.0f;
             CanvasGroup.blocksRaycasts = true;
-            //Debug.LogFormat("End Drag: {0}", name);    
         }
 
         public void OnPointerClick(PointerEventData eventData)
         {
             originalPosition = RectTransform.anchoredPosition;
-            //Debug.LogFormat("Mouse Clicked: {0}", name);
         }
     }
 }

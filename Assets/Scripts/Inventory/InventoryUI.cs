@@ -1,18 +1,21 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering.VirtualTexturing;
 
 public class InventoryUI : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    private bool _isDebugging = false;
+    public bool isDebugging = false;
+    public static bool IsDebugging = false;
+
+    private void OnValidate()
     {
-        
+        SetIsDebugging();
     }
 
-    // Update is called once per frame
-    void Update()
+    private void SetIsDebugging()
     {
-        
+        if (isDebugging == _isDebugging) return;
+        _isDebugging = isDebugging;
+        IsDebugging = _isDebugging;
     }
 }

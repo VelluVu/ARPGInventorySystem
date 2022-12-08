@@ -8,6 +8,7 @@ namespace ARPGInventory
     {
         private const string ITEM_NAMING_FORMAT = "Item: {0}";
         private const string HAS_EXISTING_ITEM_VISUAL_FORMAT = "Has existing item visual: {0}";
+
         Vector2 visualCellSize = new Vector2(32.0f, 32.0f);
         public GameObject itemPrefab;
         public List<ItemVisual> itemVisuals = new List<ItemVisual>();
@@ -34,16 +35,16 @@ namespace ARPGInventory
         {
             Inventory.onCreate += OnCreateInventory;
             Inventory.onClear += OnClearInventory;
-            Inventory.onItemSlotChange += OnItemDataChange;
-            Inventory.onItemDataDelete += OnItemDataDeleted;
+            Inventory.onItemChange += OnItemDataChange;
+            Inventory.onItemDelete += OnItemDataDeleted;
         }
 
         public void RemoveListeners()
         {
             Inventory.onCreate -= OnCreateInventory;
             Inventory.onClear -= OnClearInventory;
-            Inventory.onItemSlotChange -= OnItemDataChange;
-            Inventory.onItemDataDelete -= OnItemDataDeleted;
+            Inventory.onItemChange -= OnItemDataChange;
+            Inventory.onItemDelete -= OnItemDataDeleted;
         }
 
         public void ClearItemVisuals()
@@ -90,7 +91,7 @@ namespace ARPGInventory
             var itemVisual = FindItemVisualByItemSlot(itemSlot);
             if (itemVisual != null)
             {
-                Debug.LogFormat(HAS_EXISTING_ITEM_VISUAL_FORMAT, itemVisual.name);
+                if(InventoryUI.IsDebugging) Debug.LogFormat(HAS_EXISTING_ITEM_VISUAL_FORMAT, itemVisual.name);
                 if (!itemVisual.ItemSlot.HasItems)
                 {
                     RemoveEmptyItemVisual(itemVisual);
@@ -140,7 +141,7 @@ namespace ARPGInventory
             Vector2 localMousePosition = HelperFunctionLibrary.GetLocalMousePositionOfRectTransform(eventData.position, ItemVisualStorage.RectTransform);
             Vector2 visualPosition = HelperFunctionLibrary.LocalPositionToVisualCoordinate(localMousePosition, visualCellSize);
             Vector2Int cellCoordinate = HelperFunctionLibrary.PositionToCellCoordinate(visualPosition);
-            DropItemResult dropResult = Inventory.TryToDropItemSlotToCoordinate(itemVisual.ItemSlot, cellCoordinate);
+            DropItemResult dropResult = Inventory.DragDropItemToCoordinate(itemVisual.ItemSlot, cellCoordinate);
 
             if (draggedObject == null) return;
 
@@ -197,6 +198,6 @@ namespace ARPGInventory
             InventoryRectTransform.sizeDelta -= oldInventoryUISize;
             InventoryRectTransform.sizeDelta += newInventoryUISize;
             
-        }
+        }      
     }
 }
